@@ -46,12 +46,13 @@ def predict_img(net,
         probs = tf(probs.cpu())
         full_mask = probs.squeeze().cpu().numpy()
 
-    return full_mask > out_threshold
-
+    return full_mask if not (out_threshold > 0.0) else full_mask > out_threshold
 
 def get_args():
     parser = argparse.ArgumentParser(description='Predict masks from input images',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('-c', '--cpu', action='store_true', default=False,
+                        help='Use CPU even if GPU is available')
     parser.add_argument('--model', '-m', default='MODEL.pth',
                         metavar='FILE',
                         help="Specify the file in which the model is stored")
@@ -67,7 +68,9 @@ def get_args():
                         help="Do not save the output masks",
                         default=False)
     parser.add_argument('--mask-threshold', '-t', type=float,
-                        help="Minimum probability value to consider a mask pixel white",
+                        help="Minimum probability value to consider a mask pixel "
+                             "white unless 0.0 when an 8-bit probability image is "
+                             "output." ,
                         default=0.5)
     parser.add_argument('--scale', '-s', type=float,
                         help="Scale factor for the input images",
@@ -106,7 +109,8 @@ if __name__ == "__main__":
 
     logging.info("Loading model {}".format(args.model))
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cuda' if (not args.cpu) and torch.cuda.is_available()
+                          else 'cpu')
     logging.info(f'Using device {device}')
     net.to(device=device)
     net.load_state_dict(torch.load(args.model, map_location=device))
