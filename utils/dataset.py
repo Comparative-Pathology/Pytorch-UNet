@@ -47,6 +47,9 @@ class BasicDataset(Dataset):
         mask_file = glob(self.masks_dir + idx + self.mask_suffix + '.*')
         img_file = glob(self.imgs_dir + idx + '.*')
 
+        f'mask_file = {mask_file}'
+        f'img_file  = {img_file}'
+
         assert len(mask_file) == 1, \
             f'Either no mask or multiple masks found for the ID {idx}: {mask_file}'
         assert len(img_file) == 1, \
