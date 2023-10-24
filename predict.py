@@ -16,6 +16,7 @@ def predict_img(net,
                 full_img,
                 device,
                 scale_factor=1,
+                class_idx=0,
                 keep_float=False,
                 out_threshold=0.5):
     net.eval()
@@ -25,12 +26,16 @@ def predict_img(net,
 
     with torch.no_grad():
         output = net(img).cpu()
-        output = F.interpolate(output, (full_img.size[1], full_img.size[0]), mode='bilinear')
+        output = F.interpolate(output, (full_img.size[1], full_img.size[0]),
+               mode='bilinear')
         mask = None
         pmask = None
         if keep_float:
-            mask = torch.sigmoid(output)
-            pmask = mask[0].float().squeeze().numpy()
+            if net.n_classes > 1:
+                mask = torch.sigmoid(output[0][class_idx])
+            else:
+                mask = torch.sigmoid(output)[0]
+            pmask = mask.float().squeeze().numpy()
         else:
             if net.n_classes > 1:
                 mask = output.argmax(dim=1)
@@ -43,23 +48,32 @@ def predict_img(net,
 def get_args():
     parser = argparse.ArgumentParser(description='Predict masks from input images')
     parser.add_argument('--model', '-m', default='MODEL.pth', metavar='FILE',
-                        help='Specify the file in which the model is stored')
-    parser.add_argument('--input', '-i', metavar='INPUT', nargs='+', help='Filenames of input images', required=True)
-    parser.add_argument('--output', '-o', metavar='OUTPUT', nargs='+', help='Filenames of output images')
+            help='Specify the file in which the model is stored')
+    parser.add_argument('--input', '-i', metavar='INPUT', nargs='+',
+            help='Filenames of input images', required=True)
+    parser.add_argument('--output', '-o', metavar='OUTPUT', nargs='+',
+            help='Filenames of output images')
     parser.add_argument('--cpu', '-u', action='store_true',
-                        help='Always restrict to CPU')
+            help='Always restrict to CPU')
     parser.add_argument('--viz', '-v', action='store_true',
-                        help='Visualize the images as they are processed')
+            help='Visualize the images as they are processed')
     parser.add_argument('--keep-float', '-f', action='store_true',
-                        help='Output mask is floating point probability image.')
-    parser.add_argument('--no-save', '-S', action='store_true', help='Do not save the output masks')
+            help='Output mask is floating point probability image.')
+    parser.add_argument('--class-idx', '-k', type=int, default=0,
+            help='The index of a multi-class prediction for floating point ' +
+            'output.')
+    parser.add_argument('--no-save', '-S', action='store_true',
+            help='Do not save the output masks')
     parser.add_argument('--mask-threshold', '-t', type=float, default=0.5,
-                        help='Minimum probability value to consider a mask pixel white')
+            help='Minimum probability value to consider a mask pixel white')
     parser.add_argument('--scale', '-s', type=float, default=0.5,
-                        help='Scale factor for the input images')
-    parser.add_argument('--bilinear', action='store_true', default=False, help='Use bilinear upsampling')
-    parser.add_argument('--channels', '-n', type=int, default=3, help='Number of channels (1 greyscale, 3 RGB)')
-    parser.add_argument('--classes', '-c', type=int, default=2, help='Number of classes')
+            help='Scale factor for the input images')
+    parser.add_argument('--bilinear', action='store_true', default=False,
+            help='Use bilinear upsampling')
+    parser.add_argument('--channels', '-n', type=int, default=3,
+            help='Number of channels (1 greyscale, 3 RGB)')
+    parser.add_argument('--classes', '-c', type=int, default=2,
+            help='Number of classes')
     
     return parser.parse_args()
 
@@ -74,13 +88,13 @@ def get_output_filenames(args):
 def mask_to_image(mask: np.ndarray, mask_values, keep_float=False):
     if isinstance(mask_values[0], list):
         out = np.zeros((mask.shape[-2], mask.shape[-1], len(mask_values[0])),
-            dtype=np.float if keep_float else np.uint8)
+            dtype=float if keep_float else np.uint8)
     elif mask_values == [0, 1]:
         out = np.zeros((mask.shape[-2], mask.shape[-1]),
-            dtype=np.float if keep_float else bool)
+            dtype=float if keep_float else bool)
     else:
         out = np.zeros((mask.shape[-2], mask.shape[-1]),
-            dtype=np.float if keep_float else np.uint8)
+            dtype=float if keep_float else np.uint8)
 
     if mask.ndim == 3:
         mask = np.argmax(mask, axis=0)
@@ -122,6 +136,7 @@ if __name__ == '__main__':
                            full_img=img,
                            scale_factor=args.scale,
                            keep_float=args.keep_float,
+                           class_idx = args.class_idx,
                            out_threshold=args.mask_threshold,
                            device=device)
 
